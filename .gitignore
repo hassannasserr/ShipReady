@@ -1,0 +1,15 @@
+.venv/
+node_modules/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+artifacts/*
+!artifacts/.gitkeep
+dist/
+build/
+npm-debug.log*

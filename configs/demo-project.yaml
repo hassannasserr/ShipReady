@@ -1,0 +1,24 @@
+project:
+  name: demo-commerce
+  adapter: demo-express
+  base_url: http://127.0.0.1:3000
+
+health_check:
+  path: /health
+  expected_status: 200
+  timeout_seconds: 5
+
+database:
+  type: mongodb
+  disposable_test_database: true
+
+execution:
+  max_run_seconds: 300
+  scenario_timeout_seconds: 30
+  allow_external_network: false
+
+scenarios:
+  - I-01
+  - B-01
+  - B-02
+  - B-03

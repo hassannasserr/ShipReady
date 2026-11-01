@@ -1,0 +1,1 @@
+"""ShipReady test suite."""

@@ -1,0 +1,19 @@
+{
+  "name": "shipready-demo-commerce",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Controlled commerce API used by ShipReady tests.",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "mongoose": "^8.19.3"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^10.4.1",
+    "supertest": "^7.1.4"
+  }
+}
