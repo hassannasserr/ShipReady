@@ -11,7 +11,10 @@ CREATE TABLE IF NOT EXISTS runs (
     started_at TEXT NOT NULL,
     completed_at TEXT,
     status TEXT NOT NULL,
-    config_path TEXT NOT NULL
+    config_path TEXT NOT NULL,
+    repository_url TEXT,
+    requested_revision TEXT,
+    commit_sha TEXT
 );
 CREATE TABLE IF NOT EXISTS scenario_results (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,5 +36,12 @@ def initialize_database(path: Path) -> sqlite3.Connection:
     connection = sqlite3.connect(path)
     connection.execute("PRAGMA foreign_keys = ON")
     connection.executescript(SCHEMA)
+    columns = {
+        row[1]
+        for row in connection.execute("PRAGMA table_info(runs)").fetchall()
+    }
+    for column in ("repository_url", "requested_revision", "commit_sha"):
+        if column not in columns:
+            connection.execute(f"ALTER TABLE runs ADD COLUMN {column} TEXT")
     connection.commit()
     return connection

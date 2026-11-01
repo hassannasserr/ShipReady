@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Annotated
+from uuid import uuid4
 
 import typer
 
+from shipready.adapters.github_adapter import RepositoryError, clone_repository
+from shipready.adapters.project_detector import inspect_repository
 from shipready.agent.config import load_config
 from shipready.agent.doctor import run_doctor
 from shipready.agent.run_manager import RunManager
@@ -19,8 +22,10 @@ from shipready.engines.infrastructure.controller import ComposeController
 from shipready.engines.infrastructure.database_outage import run_database_outage
 from shipready.engines.infrastructure.dependency_latency import run_dependency_latency
 from shipready.engines.infrastructure.process_restart import run_process_restart
-from shipready.evidence.models import ResultStatus, RunReport
+from shipready.evidence.models import Evidence, ResultStatus, RunReport, ScenarioResult
 from shipready.reporting.json_report import write_json_report
+from shipready.safety.cleanup import CleanupError, cleanup_workspace
+from shipready.safety.policy import SafetyViolation, validate_execution_policy
 
 app = typer.Typer(
     name="shipready",
@@ -44,6 +49,106 @@ def doctor() -> None:
 
     if not report.is_healthy:
         raise typer.Exit(code=1)
+
+
+@app.command("inspect")
+def inspect(
+    repository: Annotated[
+        str, typer.Option("--repository", help="HTTPS GitHub repository URL.")
+    ],
+    revision: Annotated[
+        str | None,
+        typer.Option("--revision", help="Branch or exact commit SHA."),
+    ] = None,
+    artifacts: Annotated[
+        Path, typer.Option("--artifacts")
+    ] = Path("artifacts"),
+    database: Annotated[
+        Path, typer.Option("--database")
+    ] = Path("shipready.db"),
+    workspace_root: Annotated[
+        Path, typer.Option("--workspace-root")
+    ] = Path(".shipready/workspaces"),
+    keep_workspace: Annotated[
+        bool, typer.Option("--keep-workspace")
+    ] = False,
+) -> None:
+    """Clone and statically inspect a GitHub repository without running its code."""
+    workspace = workspace_root / str(uuid4())
+    workspace.mkdir(parents=True, exist_ok=False)
+    (workspace / ".shipready-managed").write_text("managed\n", encoding="utf-8")
+    repository_root = workspace / "repository"
+    try:
+        commit_sha = clone_repository(repository, repository_root, revision)
+        inspection = inspect_repository(repository_root)
+        findings = list(inspection.findings)
+        status = ResultStatus.PASSED if inspection.supported else ResultStatus.FAILED
+        config_path = inspection.config_path or Path("<repository inspection>")
+        if inspection.supported and inspection.config_path:
+            config = load_config(inspection.config_path)
+            findings.extend(
+                validate_execution_policy(
+                    config,
+                    repository_root,
+                    workspace_root,
+                    repository_root / "docker" / "compose.yaml",
+                )
+            )
+        result = ScenarioResult(
+            scenario_id="REPOSITORY-INSPECTION",
+            status=status,
+            expected_behavior=(
+                "A reviewed repository is inspected without executing repository code."
+            ),
+            observed_behavior="; ".join(findings),
+            evidence=[
+                Evidence(name="repository_url", value=repository),
+                Evidence(name="requested_revision", value=revision),
+                Evidence(name="commit_sha", value=commit_sha),
+                Evidence(name="workspace", value=str(workspace)),
+            ],
+            reproduction_steps=[
+                "Validate HTTPS GitHub URL",
+                "Clone with git --no-checkout",
+                "Inspect reviewed YAML and Compose files",
+            ],
+        )
+        manager = RunManager(artifacts, database)
+        try:
+            metadata, artifact_dir = manager.start(
+                config_path,
+                repository_url=repository,
+                requested_revision=revision,
+                commit_sha=commit_sha,
+            )
+            manager.repository.add_result(str(metadata.run_id), result)
+            manager.complete(
+                metadata,
+                "completed" if result.status == ResultStatus.PASSED else "failed",
+            )
+            report_path = artifact_dir / "report.json"
+            write_json_report(
+                RunReport(metadata=metadata, results=[result]),
+                report_path,
+            )
+            typer.echo(f"Run ID: {metadata.run_id}")
+            typer.echo(f"Commit: {commit_sha}")
+            typer.echo(f"Status: {result.status.value}")
+            typer.echo(f"Report: {report_path}")
+            if result.status != ResultStatus.PASSED:
+                raise typer.Exit(code=1)
+        finally:
+            manager.close()
+    except (RepositoryError, SafetyViolation, ValueError) as exc:
+        typer.echo(f"Inspection rejected: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    finally:
+        if not keep_workspace:
+            try:
+                cleanup_workspace(workspace, workspace_root)
+            except CleanupError as exc:
+                typer.echo(f"Cleanup error: {exc}", err=True)
+                raise typer.Exit(code=1) from exc
 
 
 @app.command()

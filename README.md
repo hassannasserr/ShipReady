@@ -1230,6 +1230,32 @@ file such as `artifacts\phase3-final\<run-id>\report.json`. The dashboard
 shows the run metadata, pass/fail summary, scenario details, evidence, and
 reproduction steps. Build it for production with `npm run build`.
 
+### Phase 5 GitHub inspection and safety
+
+Phase 5 adds a non-executing GitHub inspection flow. It accepts only HTTPS
+GitHub repository URLs, clones with `git --no-checkout`, supports a branch or
+exact commit, records the resolved commit SHA, and statically inspects the
+reviewed ShipReady configuration and Docker Compose file. Repository scripts
+are never imported or executed during inspection.
+
+Run an inspection from PowerShell:
+
+```powershell
+.\.venv\Scripts\shipready.exe inspect --repository https://github.com/owner/repository.git --revision main --artifacts artifacts\inspection --database artifacts\inspection\shipready.db
+```
+
+The inspection succeeds only when a reviewed configuration and Compose file
+are present and the static safety checks pass. The JSON report records the
+repository URL, requested revision, resolved commit SHA, and inspection
+findings. Workspaces are created under `.shipready\workspaces` and removed
+after inspection unless `--keep-workspace` is supplied.
+
+This command does not run target code. Any future target execution must pass
+the safety policy and require explicit user approval. The policy rejects
+external networking, non-disposable databases, privileged Compose services,
+host networking, and Docker socket mounts. Cleanup removes only marked
+workspaces created beneath the managed workspace root.
+
 ---
 
 ## 19. Engineering Principles

@@ -19,8 +19,21 @@ class RunManager:
         self.connection = initialize_database(database_path)
         self.repository = RunRepository(self.connection)
 
-    def start(self, config_path: Path) -> tuple[RunMetadata, Path]:
-        metadata = RunMetadata(config_path=str(config_path), status="running")
+    def start(
+        self,
+        config_path: Path,
+        *,
+        repository_url: str | None = None,
+        requested_revision: str | None = None,
+        commit_sha: str | None = None,
+    ) -> tuple[RunMetadata, Path]:
+        metadata = RunMetadata(
+            config_path=str(config_path),
+            status="running",
+            repository_url=repository_url,
+            requested_revision=requested_revision,
+            commit_sha=commit_sha,
+        )
         artifact_dir = self.artifacts_root / str(metadata.run_id)
         artifact_dir.mkdir(parents=True, exist_ok=False)
         self.repository.create_run(metadata)

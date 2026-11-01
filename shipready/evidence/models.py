@@ -47,6 +47,9 @@ class RunMetadata(BaseModel):
     completed_at: datetime | None = None
     status: str = "created"
     config_path: str
+    repository_url: str | None = None
+    requested_revision: str | None = None
+    commit_sha: str | None = None
 
 
 class RunReport(BaseModel):

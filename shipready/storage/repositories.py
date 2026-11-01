@@ -17,8 +17,11 @@ class RunRepository:
     def create_run(self, metadata: RunMetadata) -> None:
         self.connection.execute(
             """
-            INSERT INTO runs(run_id, started_at, completed_at, status, config_path)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO runs(
+                run_id, started_at, completed_at, status, config_path,
+                repository_url, requested_revision, commit_sha
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 str(metadata.run_id),
@@ -28,6 +31,9 @@ class RunRepository:
                 else None,
                 metadata.status,
                 metadata.config_path,
+                metadata.repository_url,
+                metadata.requested_revision,
+                metadata.commit_sha,
             ),
         )
         self.connection.commit()
