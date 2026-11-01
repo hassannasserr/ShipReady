@@ -1186,6 +1186,50 @@ Run the Phase 2 tests and quality checks with:
 .\.venv\Scripts\python.exe -m mypy
 ```
 
+### Phase 4 infrastructure scenarios
+
+Phase 4 adds controlled infrastructure failure tests. The `infrastructure`
+command runs the baseline first, then only the configured I-* scenarios:
+
+- `I-01` stops and starts only the approved local `mongo` Compose service and
+  verifies that an existing order is readable after recovery.
+- `I-02` recreates only the approved `app` service with a 2000 ms test delay,
+  measures the delayed request, removes the delay, and verifies health.
+- `I-03` restarts only the approved `app` service and verifies that an order
+  remains readable afterward.
+
+The controller accepts only `app` and `mongo`, uses the selected Compose file,
+and reports command failures instead of hiding them. These scenarios are local
+only and must never be pointed at a production Compose project.
+
+With Docker Compose healthy, run:
+
+```powershell
+.\.venv\Scripts\shipready.exe infrastructure --config configs\demo-project.yaml --artifacts artifacts\phase4 --database artifacts\phase4\shipready.db --compose-file docker\compose.yaml
+```
+
+The command writes a JSON report under the printed run directory. It returns a
+non-zero exit code when a scenario fails or encounters an execution error.
+Run `docker compose -f .\docker\compose.yaml ps` afterward and confirm both
+services are healthy. If needed, restore the disposable environment with
+`docker compose -f .\docker\compose.yaml down -v`, then start it again.
+
+### Phase 4 React UI
+
+The React dashboard lives in `ui/` and displays actual JSON reports generated
+by ShipReady. It does not create test results or use mock data. Start it with:
+
+```powershell
+cd ui
+npm install
+npm run dev
+```
+
+Open the Vite URL shown in the terminal, click **Load report**, and select a
+file such as `artifacts\phase3-final\<run-id>\report.json`. The dashboard
+shows the run metadata, pass/fail summary, scenario details, evidence, and
+reproduction steps. Build it for production with `npm run build`.
+
 ---
 
 ## 19. Engineering Principles

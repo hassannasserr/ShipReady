@@ -22,6 +22,7 @@ services:
       PORT: "3000"
       MONGO_URI: mongodb://mongo:27017/shipready_demo
       DEFECT_MODE: ${DEFECT_MODE:-}
+      DEMO_DELAY_MS: ${DEMO_DELAY_MS:-0}
     ports:
       - "127.0.0.1:${SHIPREADY_DEMO_PORT:-3000}:3000"
     networks:

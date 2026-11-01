@@ -5,6 +5,13 @@ import { health } from "./routes/health.routes.js";
 export function createApp() {
   const app = express();
   app.use(express.json({ limit: "32kb" }));
+  app.use(async (request, _response, next) => {
+    const delay = Number.parseInt(process.env.DEMO_DELAY_MS ?? "0", 10);
+    if (delay > 0 && request.path !== "/health") {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+    next();
+  });
 
   app.get("/health", health);
   app.post("/orders", createOrder);

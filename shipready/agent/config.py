@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-SUPPORTED_SCENARIOS = {"I-01", "B-01", "B-02", "B-03"}
+SUPPORTED_SCENARIOS = {"I-01", "I-02", "I-03", "B-01", "B-02", "B-03"}
 SUPPORTED_INVARIANTS = {
     "payment_has_operation_id",
     "payment_is_associated_with_order",

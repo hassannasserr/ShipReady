@@ -15,6 +15,10 @@ from shipready.engines.business.client import DemoApiClient
 from shipready.engines.business.duplicate_request import run_duplicate_request
 from shipready.engines.business.invalid_transition import run_invalid_transition
 from shipready.engines.business.invariants import run_invariants
+from shipready.engines.infrastructure.controller import ComposeController
+from shipready.engines.infrastructure.database_outage import run_database_outage
+from shipready.engines.infrastructure.dependency_latency import run_dependency_latency
+from shipready.engines.infrastructure.process_restart import run_process_restart
 from shipready.evidence.models import ResultStatus, RunReport
 from shipready.reporting.json_report import write_json_report
 
@@ -156,6 +160,106 @@ def business(
             RunReport(metadata=metadata, results=results),
             report_path,
         )
+        typer.echo(f"Run ID: {metadata.run_id}")
+        typer.echo(
+            "Results: "
+            + ", ".join(
+                f"{result.scenario_id}={result.status.value}" for result in results
+            )
+        )
+        typer.echo(f"Report: {report_path}")
+        if failed:
+            raise typer.Exit(code=1)
+    finally:
+        manager.close()
+
+
+@app.command()
+def infrastructure(
+    config: Annotated[
+        Path,
+        typer.Option(
+            "--config",
+            exists=True,
+            dir_okay=False,
+            readable=True,
+        ),
+    ] = Path("configs/demo-project.yaml"),
+    artifacts: Annotated[
+        Path, typer.Option("--artifacts")
+    ] = Path("artifacts"),
+    database: Annotated[
+        Path, typer.Option("--database")
+    ] = Path("shipready.db"),
+    compose_file: Annotated[
+        Path,
+        typer.Option("--compose-file", exists=True, dir_okay=False, readable=True),
+    ] = Path("docker/compose.yaml"),
+) -> None:
+    """Run the baseline gate and controlled infrastructure scenarios."""
+    try:
+        app_config = load_config(config)
+    except ValueError as exc:
+        typer.echo(f"Configuration error: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+
+    manager = RunManager(artifacts, database)
+    try:
+        metadata, artifact_dir = manager.start(config)
+        results = [run_baseline(app_config)]
+        manager.repository.add_result(str(metadata.run_id), results[0])
+        if results[0].status != ResultStatus.PASSED:
+            manager.complete(metadata, "blocked")
+            report_path = artifact_dir / "report.json"
+            write_json_report(
+                RunReport(metadata=metadata, results=results),
+                report_path,
+            )
+            typer.echo(f"Run ID: {metadata.run_id}")
+            typer.echo("Status: blocked (baseline did not pass)")
+            typer.echo(f"Report: {report_path}")
+            raise typer.Exit(code=1)
+
+        client = DemoApiClient(
+            app_config.project.base_url,
+            app_config.execution.scenario_timeout_seconds,
+        )
+        controller = ComposeController(
+            compose_file,
+            app_config.execution.scenario_timeout_seconds,
+        )
+        runners = {
+            "I-01": lambda: run_database_outage(
+                client, controller, app_config.execution.scenario_timeout_seconds
+            ),
+            "I-02": lambda: run_dependency_latency(
+                client,
+                controller,
+                2000,
+                app_config.execution.scenario_timeout_seconds,
+            ),
+            "I-03": lambda: run_process_restart(
+                client, controller, app_config.execution.scenario_timeout_seconds
+            ),
+        }
+        try:
+            for scenario_id in app_config.scenarios:
+                runner = runners.get(scenario_id)
+                if runner is None:
+                    continue
+                result = runner()
+                results.append(result)
+                manager.repository.add_result(str(metadata.run_id), result)
+        finally:
+            client.close()
+
+        failed = any(
+            result.status in {ResultStatus.FAILED, ResultStatus.ERROR}
+            for result in results
+        )
+        manager.complete(metadata, "completed" if not failed else "failed")
+        report_path = artifact_dir / "report.json"
+        write_json_report(RunReport(metadata=metadata, results=results), report_path)
         typer.echo(f"Run ID: {metadata.run_id}")
         typer.echo(
             "Results: "

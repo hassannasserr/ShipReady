@@ -19,6 +19,8 @@ execution:
 
 scenarios:
   - I-01
+  - I-02
+  - I-03
   - B-01
   - B-02
   - B-03
