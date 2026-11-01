@@ -22,3 +22,9 @@ scenarios:
   - B-01
   - B-02
   - B-03
+
+business_invariants:
+  - payment_has_operation_id
+  - payment_is_associated_with_order
+  - one_logical_payment_recorded
+  - paid_order_matches_success

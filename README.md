@@ -1152,6 +1152,32 @@ and writes `report.json` inside the run directory. A successful run prints its
 run ID and report path. A failed health check returns a non-zero exit code and
 is recorded as `blocked`.
 
+Run the configured business scenarios after the baseline:
+
+```powershell
+.\.venv\Scripts\shipready.exe business --config configs\demo-project.yaml --artifacts artifacts\phase3 --database artifacts\phase3\shipready.db
+```
+
+The `business` command always runs the baseline first. If the baseline does
+not pass, it records a blocked run and does not execute B-01, B-02, or B-03.
+When the baseline passes, it runs the configured business scenarios:
+
+- `B-01` verifies that a repeated payment idempotency key creates one logical
+  payment.
+- `B-02` verifies that a cancelled order cannot be paid.
+- `B-03` verifies only the payment and order invariants configured for the
+  Demo Commerce API.
+
+The `business_invariants` list in `configs/demo-project.yaml` is the explicit
+allowlist for B-03. Unsupported invariant names are rejected during
+configuration validation.
+
+Each result includes expected behavior, observed behavior, evidence, and
+reproduction steps. The test-only defective implementations can be run by
+recreating Compose with `DEFECT_MODE=duplicate-payment` or
+`DEFECT_MODE=invalid-transition`; the corrected implementation must not enable
+either mode.
+
 Run the Phase 2 tests and quality checks with:
 
 ```powershell

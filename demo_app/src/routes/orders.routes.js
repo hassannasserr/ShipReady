@@ -97,7 +97,7 @@ export async function payOrder(request, response, next) {
     }
     const allowsInvalidTransition =
       process.env.DEFECT_MODE === "invalid-transition" ||
-      process.env.DEFECT_MODE === "duplicate-payment";
+      (process.env.DEFECT_MODE === "duplicate-payment" && order.state === "paid");
     if (order.state !== "pending" && !allowsInvalidTransition) {
       return response.status(409).json({ error: `Cannot pay an order in ${order.state} state.` });
     }

@@ -9,6 +9,12 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 SUPPORTED_SCENARIOS = {"I-01", "B-01", "B-02", "B-03"}
+SUPPORTED_INVARIANTS = {
+    "payment_has_operation_id",
+    "payment_is_associated_with_order",
+    "one_logical_payment_recorded",
+    "paid_order_matches_success",
+}
 
 
 class ProjectConfig(BaseModel):
@@ -81,6 +87,7 @@ class AppConfig(BaseModel):
     database: DatabaseConfig
     execution: ExecutionConfig
     scenarios: list[str] = Field(min_length=1)
+    business_invariants: list[str] = Field(default_factory=list)
 
     @field_validator("scenarios")
     @classmethod
@@ -88,6 +95,14 @@ class AppConfig(BaseModel):
         unsupported = sorted(set(values) - SUPPORTED_SCENARIOS)
         if unsupported:
             raise ValueError(f"unsupported scenario IDs: {', '.join(unsupported)}")
+        return values
+
+    @field_validator("business_invariants")
+    @classmethod
+    def validate_invariants(cls, values: list[str]) -> list[str]:
+        unsupported = sorted(set(values) - SUPPORTED_INVARIANTS)
+        if unsupported:
+            raise ValueError(f"unsupported invariant IDs: {', '.join(unsupported)}")
         return values
 
 
