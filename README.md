@@ -1135,6 +1135,31 @@ The reviewed test-only defect fixtures are selected with `DEFECT_MODE`:
 allows payment after cancellation. Do not enable either mode for a corrected
 baseline run. No real payment provider or production database is used.
 
+### Phase 2 baseline run
+
+With the demo Compose environment healthy, run the first ShipReady baseline:
+
+```powershell
+.\.venv\Scripts\shipready.exe baseline `
+  --config configs\demo-project.yaml `
+  --artifacts artifacts\phase2 `
+  --database artifacts\phase2\shipready.db
+```
+
+The command validates the configuration, creates a unique run directory,
+requests the configured health endpoint, stores the run and result in SQLite,
+and writes `report.json` inside the run directory. A successful run prints its
+run ID and report path. A failed health check returns a non-zero exit code and
+is recorded as `blocked`.
+
+Run the Phase 2 tests and quality checks with:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m mypy
+```
+
 ---
 
 ## 19. Engineering Principles
