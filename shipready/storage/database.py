@@ -14,7 +14,9 @@ CREATE TABLE IF NOT EXISTS runs (
     config_path TEXT NOT NULL,
     repository_url TEXT,
     requested_revision TEXT,
-    commit_sha TEXT
+    commit_sha TEXT,
+    cleanup_status TEXT,
+    safety_warnings_json TEXT NOT NULL DEFAULT '[]'
 );
 CREATE TABLE IF NOT EXISTS scenario_results (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,8 +42,15 @@ def initialize_database(path: Path) -> sqlite3.Connection:
         row[1]
         for row in connection.execute("PRAGMA table_info(runs)").fetchall()
     }
-    for column in ("repository_url", "requested_revision", "commit_sha"):
+    migration_definitions = {
+        "repository_url": "TEXT",
+        "requested_revision": "TEXT",
+        "commit_sha": "TEXT",
+        "cleanup_status": "TEXT",
+        "safety_warnings_json": "TEXT NOT NULL DEFAULT '[]'",
+    }
+    for column, definition in migration_definitions.items():
         if column not in columns:
-            connection.execute(f"ALTER TABLE runs ADD COLUMN {column} TEXT")
+            connection.execute(f"ALTER TABLE runs ADD COLUMN {column} {definition}")
     connection.commit()
     return connection

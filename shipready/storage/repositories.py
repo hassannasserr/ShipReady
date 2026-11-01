@@ -19,9 +19,10 @@ class RunRepository:
             """
             INSERT INTO runs(
                 run_id, started_at, completed_at, status, config_path,
-                repository_url, requested_revision, commit_sha
+                repository_url, requested_revision, commit_sha,
+                cleanup_status, safety_warnings_json
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 str(metadata.run_id),
@@ -34,6 +35,8 @@ class RunRepository:
                 metadata.repository_url,
                 metadata.requested_revision,
                 metadata.commit_sha,
+                metadata.cleanup_status,
+                json.dumps(metadata.safety_warnings),
             ),
         )
         self.connection.commit()
@@ -42,7 +45,8 @@ class RunRepository:
         self.connection.execute(
             """
             UPDATE runs
-            SET completed_at = ?, status = ?, config_path = ?
+            SET completed_at = ?, status = ?, config_path = ?,
+                cleanup_status = ?, safety_warnings_json = ?
             WHERE run_id = ?
             """,
             (
@@ -51,6 +55,8 @@ class RunRepository:
                 else None,
                 metadata.status,
                 metadata.config_path,
+                metadata.cleanup_status,
+                json.dumps(metadata.safety_warnings),
                 str(metadata.run_id),
             ),
         )
@@ -85,3 +91,29 @@ class RunRepository:
             (run_id,),
         ).fetchone()
         return int(row[0]) if row else 0
+
+    def list_runs(self, limit: int = 50) -> list[dict[str, object]]:
+        """Return recent local runs for CLI history."""
+        rows = self.connection.execute(
+            """
+            SELECT run_id, started_at, completed_at, status, config_path,
+                   repository_url, requested_revision, commit_sha
+            FROM runs
+            ORDER BY started_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        return [
+            {
+                "run_id": row[0],
+                "started_at": row[1],
+                "completed_at": row[2],
+                "status": row[3],
+                "config_path": row[4],
+                "repository_url": row[5],
+                "requested_revision": row[6],
+                "commit_sha": row[7],
+            }
+            for row in rows
+        ]

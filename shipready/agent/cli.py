@@ -7,6 +7,7 @@ from typing import Annotated
 from uuid import uuid4
 
 import typer
+from pydantic import ValidationError
 
 from shipready.adapters.github_adapter import RepositoryError, clone_repository
 from shipready.adapters.project_detector import inspect_repository
@@ -23,6 +24,7 @@ from shipready.engines.infrastructure.database_outage import run_database_outage
 from shipready.engines.infrastructure.dependency_latency import run_dependency_latency
 from shipready.engines.infrastructure.process_restart import run_process_restart
 from shipready.evidence.models import Evidence, ResultStatus, RunReport, ScenarioResult
+from shipready.reporting.html_report import write_html_report
 from shipready.reporting.json_report import write_json_report
 from shipready.safety.cleanup import CleanupError, cleanup_workspace
 from shipready.safety.policy import SafetyViolation, validate_execution_policy
@@ -32,6 +34,15 @@ app = typer.Typer(
     help="Local-first QA automation and production-readiness assessment.",
     no_args_is_help=True,
 )
+
+
+def _write_reports(report: RunReport, artifact_dir: Path) -> tuple[Path, Path]:
+    """Write both report formats for a completed run."""
+    json_path = artifact_dir / "report.json"
+    html_path = artifact_dir / "report.html"
+    write_json_report(report, json_path)
+    write_html_report(report, html_path)
+    return json_path, html_path
 
 
 @app.callback()
@@ -126,10 +137,9 @@ def inspect(
                 metadata,
                 "completed" if result.status == ResultStatus.PASSED else "failed",
             )
-            report_path = artifact_dir / "report.json"
-            write_json_report(
+            report_path, _ = _write_reports(
                 RunReport(metadata=metadata, results=[result]),
-                report_path,
+                artifact_dir,
             )
             typer.echo(f"Run ID: {metadata.run_id}")
             typer.echo(f"Commit: {commit_sha}")
@@ -183,8 +193,10 @@ def baseline(
         manager.repository.add_result(str(metadata.run_id), result)
         status = "completed" if result.status == "passed" else "blocked"
         manager.complete(metadata, status)
-        report_path = artifact_dir / "report.json"
-        write_json_report(RunReport(metadata=metadata, results=[result]), report_path)
+        report_path, _ = _write_reports(
+            RunReport(metadata=metadata, results=[result]),
+            artifact_dir,
+        )
         typer.echo(f"Run ID: {metadata.run_id}")
         typer.echo(f"Status: {result.status.value}")
         typer.echo(f"Report: {report_path}")
@@ -226,10 +238,9 @@ def business(
         manager.repository.add_result(str(metadata.run_id), results[0])
         if results[0].status != ResultStatus.PASSED:
             manager.complete(metadata, "blocked")
-            report_path = artifact_dir / "report.json"
-            write_json_report(
+            report_path, _ = _write_reports(
                 RunReport(metadata=metadata, results=results),
-                report_path,
+                artifact_dir,
             )
             typer.echo(f"Run ID: {metadata.run_id}")
             typer.echo("Status: blocked (baseline did not pass)")
@@ -260,10 +271,9 @@ def business(
             for result in results
         )
         manager.complete(metadata, "completed" if not failed else "failed")
-        report_path = artifact_dir / "report.json"
-        write_json_report(
+        report_path, _ = _write_reports(
             RunReport(metadata=metadata, results=results),
-            report_path,
+            artifact_dir,
         )
         typer.echo(f"Run ID: {metadata.run_id}")
         typer.echo(
@@ -315,10 +325,9 @@ def infrastructure(
         manager.repository.add_result(str(metadata.run_id), results[0])
         if results[0].status != ResultStatus.PASSED:
             manager.complete(metadata, "blocked")
-            report_path = artifact_dir / "report.json"
-            write_json_report(
+            report_path, _ = _write_reports(
                 RunReport(metadata=metadata, results=results),
-                report_path,
+                artifact_dir,
             )
             typer.echo(f"Run ID: {metadata.run_id}")
             typer.echo("Status: blocked (baseline did not pass)")
@@ -363,8 +372,10 @@ def infrastructure(
             for result in results
         )
         manager.complete(metadata, "completed" if not failed else "failed")
-        report_path = artifact_dir / "report.json"
-        write_json_report(RunReport(metadata=metadata, results=results), report_path)
+        report_path, _ = _write_reports(
+            RunReport(metadata=metadata, results=results),
+            artifact_dir,
+        )
         typer.echo(f"Run ID: {metadata.run_id}")
         typer.echo(
             "Results: "
@@ -377,3 +388,91 @@ def infrastructure(
             raise typer.Exit(code=1)
     finally:
         manager.close()
+
+
+@app.command("run")
+def run(
+    engine: Annotated[
+        str,
+        typer.Option(
+            "--engine",
+            help="Assessment engine: baseline, business, or infrastructure.",
+        ),
+    ],
+    config: Annotated[
+        Path,
+        typer.Option("--config", exists=True, dir_okay=False, readable=True),
+    ] = Path("configs/demo-project.yaml"),
+    artifacts: Annotated[
+        Path, typer.Option("--artifacts")
+    ] = Path("artifacts"),
+    database: Annotated[
+        Path, typer.Option("--database")
+    ] = Path("shipready.db"),
+    compose_file: Annotated[
+        Path,
+        typer.Option("--compose-file", exists=True, dir_okay=False, readable=True),
+    ] = Path("docker/compose.yaml"),
+) -> None:
+    """Run one complete supported assessment workflow."""
+    commands = {
+        "baseline": lambda: baseline(config, artifacts, database),
+        "business": lambda: business(config, artifacts, database),
+        "infrastructure": lambda: infrastructure(
+            config, artifacts, database, compose_file
+        ),
+    }
+    selected = commands.get(engine.lower())
+    if selected is None:
+        typer.echo(
+            "Invalid engine. Choose baseline, business, or infrastructure.",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    selected()
+
+
+@app.command("report")
+def report(
+    source: Annotated[
+        Path, typer.Argument(exists=True, dir_okay=False, readable=True)
+    ],
+    output: Annotated[
+        Path | None, typer.Option("--output")
+    ] = None,
+) -> None:
+    """Render an existing JSON report as a standalone HTML file."""
+    try:
+        report_model = RunReport.model_validate_json(source.read_text(encoding="utf-8"))
+    except (OSError, ValidationError, ValueError) as exc:
+        typer.echo(f"Report error: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    target = output or source.with_suffix(".html")
+    write_html_report(report_model, target)
+    typer.echo(f"HTML report: {target}")
+
+
+@app.command("list-runs")
+def list_runs(
+    database: Annotated[
+        Path, typer.Option("--database")
+    ] = Path("shipready.db"),
+    limit: Annotated[
+        int, typer.Option("--limit", min=1, max=200)
+    ] = 20,
+) -> None:
+    """List recent locally persisted runs."""
+    manager = RunManager(Path("artifacts"), database)
+    try:
+        rows = manager.repository.list_runs(limit)
+    finally:
+        manager.close()
+    if not rows:
+        typer.echo("No runs found.")
+        return
+    for row in rows:
+        commit = row["commit_sha"] or "-"
+        typer.echo(
+            f"{row['run_id']}  {row['status']}  "
+            f"{row['started_at']}  commit={commit}"
+        )

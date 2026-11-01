@@ -50,6 +50,8 @@ class RunMetadata(BaseModel):
     repository_url: str | None = None
     requested_revision: str | None = None
     commit_sha: str | None = None
+    cleanup_status: str | None = None
+    safety_warnings: list[str] = Field(default_factory=list)
 
 
 class RunReport(BaseModel):

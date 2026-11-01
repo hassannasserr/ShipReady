@@ -42,6 +42,7 @@ class RunManager:
     def complete(self, metadata: RunMetadata, status: str) -> None:
         metadata.completed_at = datetime.now(UTC)
         metadata.status = status
+        metadata.cleanup_status = "not_required"
         self.repository.update_run(metadata)
 
     def close(self) -> None:

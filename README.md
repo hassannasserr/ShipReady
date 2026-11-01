@@ -2,7 +2,7 @@
 
 > **Tagline:** Break it before users do.  
 > **Project type:** Local QA automation and production-readiness assessment tool  
-> **Status:** MVP — implementation in progress (Phase 0 complete)
+> **Status:** MVP — Phases 0–8 implemented and locally verified
 > **Primary goal:** Detect and report infrastructure failures and business-logic defects using controlled fault injection, explicit expected behavior, and verifiable evidence.
 
 ---
@@ -1255,6 +1255,69 @@ the safety policy and require explicit user approval. The policy rejects
 external networking, non-disposable databases, privileged Compose services,
 host networking, and Docker socket mounts. Cleanup removes only marked
 workspaces created beneath the managed workspace root.
+
+### Phase 8 final QA and release verification
+
+The final verification covers the corrected Demo Commerce implementation,
+controlled defects, report redaction, Compose safety, the Python package, the
+Node API, and the React dashboard. The supported release workflow is:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest
+Set-Location .\demo_app; npm test; Set-Location ..
+Set-Location .\ui; npm run build; npm audit --omit=dev; Set-Location ..
+docker compose -f .\docker\compose.yaml config --quiet
+```
+
+The corrected environment must pass the infrastructure and business commands.
+The `duplicate-payment` fixture must fail B-01 and the `invalid-transition`
+fixture must fail B-02. Defect runs are expected non-zero assessments; that is
+evidence that ShipReady detected the seeded defect, not a release failure.
+
+Known limitations for this release:
+
+- External repositories are inspected but are not automatically executed.
+- The MVP supports the reviewed Demo Commerce adapter and configuration shape.
+- Docker resource limits are delegated to the local Docker installation; the
+  scenario timeout is enforced by ShipReady.
+- HTML and JSON reports are generated locally; no hosted report service is
+  included.
+
+### Phase 6 evidence and reports
+
+Every assessment now generates both `report.json` and a standalone
+`report.html`. Reports include scenario status, expected and observed behavior,
+evidence, reproduction steps, commit metadata, cleanup status, and safety
+warnings. `error`, `not_verified`, and `skipped` remain explicit statuses.
+Common credential fields and bearer tokens are redacted before either report is
+written, and report text is HTML-escaped.
+
+To render an existing JSON report again:
+
+```powershell
+.\.venv\Scripts\shipready.exe report artifacts\phase4-live\<run-id>\report.json
+```
+
+### Phase 7 CLI and run history
+
+The complete workflow can be started with one command:
+
+```powershell
+.\.venv\Scripts\shipready.exe run --engine infrastructure --config configs\demo-project.yaml --artifacts artifacts\phase7 --database artifacts\phase7\shipready.db --compose-file docker\compose.yaml
+```
+
+Supported engines are `baseline`, `business`, and `infrastructure`. The CLI
+uses exit code `0` for a completed assessment, `1` for a failed assessment,
+and `2` for invalid configuration, invalid options, or safety rejection.
+
+Recent local runs can be queried with:
+
+```powershell
+.\.venv\Scripts\shipready.exe list-runs --database artifacts\phase7\shipready.db
+```
+
+The history includes the run status and resolved commit when one was supplied.
+All existing commands remain available for focused runs.
 
 ---
 
