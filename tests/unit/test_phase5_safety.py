@@ -37,6 +37,26 @@ def test_compose_socket_mount_is_rejected(tmp_path: Path) -> None:
         inspect_compose_safety(compose)
 
 
+def test_compose_host_database_port_is_rejected(tmp_path: Path) -> None:
+    compose = tmp_path / "compose.yaml"
+    compose.write_text(
+        "services:\n"
+        "  mongo:\n"
+        "    image: mongo:7\n"
+        "    ports: ['27017:27017']\n"
+        "  app:\n"
+        "    image: app\n"
+        "    ports: ['127.0.0.1:3000:3000']\n"
+        "networks:\n"
+        "  demo-internal:\n"
+        "    internal: true\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SafetyViolation, match="mongo"):
+        inspect_compose_safety(compose)
+
+
 def test_cleanup_requires_run_marker(tmp_path: Path) -> None:
     workspace = tmp_path / "run"
     workspace.mkdir()

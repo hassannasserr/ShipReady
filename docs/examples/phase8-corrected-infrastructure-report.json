@@ -1,0 +1,155 @@
+{
+  "metadata": {
+    "run_id": "1f95fe10-7d83-45c9-a10b-6921b5b59340",
+    "started_at": "2026-11-01T02:51:43.823468Z",
+    "completed_at": "2026-11-01T02:52:12.033607Z",
+    "status": "completed",
+    "config_path": "configs\\demo-project.yaml",
+    "repository_url": null,
+    "requested_revision": null,
+    "commit_sha": null,
+    "cleanup_status": "not_required",
+    "safety_warnings": []
+  },
+  "results": [
+    {
+      "scenario_id": "BASELINE",
+      "status": "passed",
+      "expected_behavior": "HTTP 200 from http://127.0.0.1:3000/health",
+      "observed_behavior": "HTTP 200: {\"status\":\"healthy\",\"database\":\"connected\"}",
+      "evidence": [
+        {
+          "name": "url",
+          "value": "http://127.0.0.1:3000/health"
+        },
+        {
+          "name": "status_code",
+          "value": 200
+        },
+        {
+          "name": "response_body",
+          "value": "{\"status\":\"healthy\",\"database\":\"connected\"}"
+        }
+      ],
+      "reproduction_steps": [
+        "GET http://127.0.0.1:3000/health"
+      ],
+      "duration_ms": 417.17579995747656
+    },
+    {
+      "scenario_id": "I-01",
+      "status": "passed",
+      "expected_behavior": "Database requests fail during outage and recover afterward.",
+      "observed_behavior": "During outage HTTP 500; recovered=True; after_status=200.",
+      "evidence": [
+        {
+          "name": "outage_response",
+          "value": "{\"error\":\"Internal server error.\"}"
+        },
+        {
+          "name": "recovery_health",
+          "value": true
+        },
+        {
+          "name": "post_recovery_order",
+          "value": {
+            "id": "6ae6a941c97923e891b42cc2",
+            "items": [
+              {
+                "sku": "shipready-test-widget",
+                "quantity": 1,
+                "unit_price_cents": 1250,
+                "_id": "6ae6a941c97923e891b42cc3"
+              }
+            ],
+            "total_cents": 1250,
+            "state": "pending",
+            "payments": []
+          }
+        },
+        {
+          "name": "cleanup_error",
+          "value": null
+        }
+      ],
+      "reproduction_steps": [
+        "POST /orders",
+        "Stop approved mongo service",
+        "GET /orders/{order_id}",
+        "Start mongo and wait for health",
+        "GET /orders/{order_id}"
+      ],
+      "duration_ms": 16288.823300041258
+    },
+    {
+      "scenario_id": "I-02",
+      "status": "passed",
+      "expected_behavior": "Controlled 2000ms latency is observed and recovery succeeds.",
+      "observed_behavior": "HTTP 201 after 2028.6ms; recovered=True.",
+      "evidence": [
+        {
+          "name": "response_status",
+          "value": 201
+        },
+        {
+          "name": "elapsed_ms",
+          "value": 2028.6074000177905
+        },
+        {
+          "name": "configured_delay_ms",
+          "value": 2000
+        },
+        {
+          "name": "recovery_health",
+          "value": true
+        },
+        {
+          "name": "cleanup_error",
+          "value": null
+        }
+      ],
+      "reproduction_steps": [
+        "Set approved DEMO_DELAY_MS=2000",
+        "POST /orders",
+        "Remove delay and verify health"
+      ],
+      "duration_ms": 8236.145099974237
+    },
+    {
+      "scenario_id": "I-03",
+      "status": "passed",
+      "expected_behavior": "Application recovers and persistent order state remains readable.",
+      "observed_behavior": "recovered=True; after_status=200.",
+      "evidence": [
+        {
+          "name": "recovery_health",
+          "value": true
+        },
+        {
+          "name": "post_restart_order",
+          "value": {
+            "id": "6ae6a959cd06f729370137f7",
+            "items": [
+              {
+                "sku": "shipready-test-widget",
+                "quantity": 1,
+                "unit_price_cents": 1250,
+                "_id": "6ae6a959cd06f729370137f8"
+              }
+            ],
+            "total_cents": 1250,
+            "state": "pending",
+            "payments": []
+          }
+        }
+      ],
+      "reproduction_steps": [
+        "POST /orders",
+        "Restart approved app service",
+        "Wait for /health",
+        "GET /orders/{order_id}"
+      ],
+      "duration_ms": 2101.9256999716163
+    }
+  ]
+}

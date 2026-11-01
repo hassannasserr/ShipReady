@@ -11,4 +11,9 @@ const paymentSchema = new mongoose.Schema(
   { timestamps: true, versionKey: false },
 );
 
+paymentSchema.index(
+  { order_id: 1, idempotency_key: 1 },
+  { unique: true, name: "order_id_idempotency_key_unique" },
+);
+
 export const Payment = mongoose.model("Payment", paymentSchema);

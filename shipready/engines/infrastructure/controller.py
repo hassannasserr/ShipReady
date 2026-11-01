@@ -11,13 +11,22 @@ class ComposeController:
     """Run a small allowlist of non-destructive Compose operations."""
 
     APPROVED_SERVICES = {"app", "mongo"}
+    PROJECT_NAME = "shipready-demo"
 
     def __init__(self, compose_file: Path, timeout: float) -> None:
         self.compose_file = compose_file
         self.timeout = timeout
 
     def _run(self, *args: str, environment: dict[str, str] | None = None) -> str:
-        command = ["docker", "compose", "-f", str(self.compose_file), *args]
+        command = [
+            "docker",
+            "compose",
+            "-p",
+            self.PROJECT_NAME,
+            "-f",
+            str(self.compose_file),
+            *args,
+        ]
         try:
             completed = subprocess.run(
                 command,
@@ -34,6 +43,25 @@ class ComposeController:
             detail = completed.stderr.strip() or completed.stdout.strip()
             raise RuntimeError(f"Compose command failed: {' '.join(command)}: {detail}")
         return completed.stdout.strip()
+
+    def verify_project_ownership(self) -> None:
+        """Ensure Compose targets only the fixed ShipReady project."""
+        configured = set(self._run("config", "--services").splitlines())
+        if configured != self.APPROVED_SERVICES:
+            raise RuntimeError(
+                "Compose project does not define exactly the approved "
+                "app and mongo services"
+            )
+        owned = set(self._run("ps", "--all", "--services").splitlines())
+        if owned and owned != self.APPROVED_SERVICES:
+            raise RuntimeError(
+                "Compose project contains services outside the approved allowlist"
+            )
+        if not owned:
+            raise RuntimeError(
+                f"Compose project {self.PROJECT_NAME!r} is not running or "
+                "owned by this run"
+            )
 
     def stop(self, service: str) -> None:
         if service not in self.APPROVED_SERVICES:

@@ -25,7 +25,7 @@ npm run build
 1. Start the corrected demo environment from the repository root:
 
    ```powershell
-   docker compose -f .\docker\compose.yaml up --build -d
+   docker compose -p shipready-demo -f .\docker\compose.yaml up --build -d
    ```
 
 2. Generate a complete infrastructure report:

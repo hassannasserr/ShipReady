@@ -61,6 +61,21 @@ test("payment is idempotent for a repeated key", async () => {
   assert.equal((await Order.findById(orderId)).state, "paid");
 });
 
+test("payment is idempotent for concurrent requests", async () => {
+  const orderId = await createOrder();
+  const responses = await Promise.all(
+    Array.from({ length: 8 }, () =>
+      api
+        .post(`/orders/${orderId}/pay`)
+        .set("Idempotency-Key", "concurrent-payment-1"),
+    ),
+  );
+
+  assert.equal(responses.filter((response) => response.status === 201).length, 1);
+  assert.equal(responses.filter((response) => response.status === 200).length, 7);
+  assert.equal(await Payment.countDocuments({ order_id: orderId }), 1);
+});
+
 test("rejects payment for a cancelled order without mutation", async () => {
   const orderId = await createOrder();
   const cancelled = await api.post(`/orders/${orderId}/cancel`);
@@ -86,9 +101,8 @@ test("defective variants are deterministic and isolated by environment", async (
       .post(`/orders/${orderId}/pay`)
       .set("Idempotency-Key", "defect-key");
     assert.equal(first.status, 201);
-    assert.equal(second.status, 201);
-    assert.equal(second.body.duplicate, false);
-    assert.equal(await Payment.countDocuments({ order_id: orderId }), 2);
+    assert.equal(second.status, 500);
+    assert.equal(await Payment.countDocuments({ order_id: orderId }), 1);
   } finally {
     if (previous === undefined) delete process.env.DEFECT_MODE;
     else process.env.DEFECT_MODE = previous;

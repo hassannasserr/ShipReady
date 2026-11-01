@@ -27,7 +27,11 @@ from shipready.evidence.models import Evidence, ResultStatus, RunReport, Scenari
 from shipready.reporting.html_report import write_html_report
 from shipready.reporting.json_report import write_json_report
 from shipready.safety.cleanup import CleanupError, cleanup_workspace
-from shipready.safety.policy import SafetyViolation, validate_execution_policy
+from shipready.safety.policy import (
+    SafetyViolation,
+    inspect_compose_safety,
+    validate_execution_policy,
+)
 
 app = typer.Typer(
     name="shipready",
@@ -185,7 +189,6 @@ def baseline(
     except ValueError as exc:
         typer.echo(f"Configuration error: {exc}", err=True)
         raise typer.Exit(code=2) from exc
-
     manager = RunManager(artifacts, database)
     try:
         metadata, artifact_dir = manager.start(config)
@@ -317,6 +320,11 @@ def infrastructure(
     except ValueError as exc:
         typer.echo(f"Configuration error: {exc}", err=True)
         raise typer.Exit(code=2) from exc
+    try:
+        inspect_compose_safety(compose_file)
+    except SafetyViolation as exc:
+        typer.echo(f"Safety validation failed: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
 
     manager = RunManager(artifacts, database)
     try:
@@ -342,6 +350,7 @@ def infrastructure(
             compose_file,
             app_config.execution.scenario_timeout_seconds,
         )
+        controller.verify_project_ownership()
         runners = {
             "I-01": lambda: run_database_outage(
                 client, controller, app_config.execution.scenario_timeout_seconds

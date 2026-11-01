@@ -1106,16 +1106,16 @@ From the repository root, start the environment:
 **Windows PowerShell**
 
 ```powershell
-docker compose -f .\docker\compose.yaml up --build -d
-docker compose -f .\docker\compose.yaml ps
+docker compose -p shipready-demo -f .\docker\compose.yaml up --build -d
+docker compose -p shipready-demo -f .\docker\compose.yaml ps
 curl.exe http://127.0.0.1:3000/health
 ```
 
 **Linux/macOS**
 
 ```bash
-docker compose -f ./docker/compose.yaml up --build -d
-docker compose -f ./docker/compose.yaml ps
+docker compose -p shipready-demo -f ./docker/compose.yaml up --build -d
+docker compose -p shipready-demo -f ./docker/compose.yaml ps
 curl http://127.0.0.1:3000/health
 ```
 
@@ -1123,7 +1123,7 @@ The API is ready only when both services report `healthy`. Stop and remove
 only this demo environment with:
 
 ```text
-docker compose -f docker/compose.yaml down -v
+docker compose -p shipready-demo -f docker/compose.yaml down -v
 ```
 
 To run the independent API tests without Docker, install Node.js 22 or later,
@@ -1210,9 +1210,9 @@ With Docker Compose healthy, run:
 
 The command writes a JSON report under the printed run directory. It returns a
 non-zero exit code when a scenario fails or encounters an execution error.
-Run `docker compose -f .\docker\compose.yaml ps` afterward and confirm both
+Run `docker compose -p shipready-demo -f .\docker\compose.yaml ps` afterward and confirm both
 services are healthy. If needed, restore the disposable environment with
-`docker compose -f .\docker\compose.yaml down -v`, then start it again.
+`docker compose -p shipready-demo -f .\docker\compose.yaml down -v`, then start it again.
 
 ### Phase 4 React UI
 
@@ -1266,7 +1266,7 @@ Node API, and the React dashboard. The supported release workflow is:
 .\.venv\Scripts\python.exe -m pytest
 Set-Location .\demo_app; npm test; Set-Location ..
 Set-Location .\ui; npm run build; npm audit --omit=dev; Set-Location ..
-docker compose -f .\docker\compose.yaml config --quiet
+docker compose -p shipready-demo -f .\docker\compose.yaml config --quiet
 ```
 
 The corrected environment must pass the infrastructure and business commands.
@@ -1282,6 +1282,13 @@ Known limitations for this release:
   scenario timeout is enforced by ShipReady.
 - HTML and JSON reports are generated locally; no hosted report service is
   included.
+
+CI is defined in `.github/workflows/ci.yml` and runs Python tests, linting,
+type checking, Demo API tests, the React production build, and the production
+dependency audit on every push and pull request.
+
+A real corrected infrastructure report is included at
+[`docs/examples/phase8-corrected-infrastructure-report.json`](docs/examples/phase8-corrected-infrastructure-report.json).
 
 ### Phase 6 evidence and reports
 
